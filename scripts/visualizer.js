@@ -23,6 +23,16 @@ class Visualizer {
                 [233, 179, 152], [254, 249, 199]
             ]
         };
+        
+        // Add new properties for flow field
+        this.flowField = [];
+        this.cols = 0;
+        this.rows = 0;
+        this.resolution = 20; // Size of each flow field cell
+        this.noiseScale = 0.1;
+        this.noiseZ = 0;
+        this.particleSpeed = 1.5;
+        this.colorVariation = 0.3;
     }
     
     init() {
@@ -90,14 +100,26 @@ class Visualizer {
     }
     
     initParticles(p) {
+        // Reset flow field grid size based on current canvas
+        this.cols = Math.floor(p.width / this.resolution);
+        this.rows = Math.floor(p.height / this.resolution);
+        
+        // Initialize flow field array
+        this.flowField = new Array(this.cols * this.rows);
+        
         this.particles = [];
         for (let i = 0; i < this.maxParticles; i++) {
             this.particles.push({
                 x: p.random(p.width),
                 y: p.random(p.height),
-                size: p.random(2, 8),
-                speedX: p.random(-1, 1),
-                speedY: p.random(-1, 1),
+                size: p.random(2, 6),
+                alpha: p.random(150, 255),
+                hue: p.random(360),
+                prevX: 0,
+                prevY: 0,
+                // Add properties for trails
+                history: [],
+                maxHistory: p.random(5, 20), // Random trail length for each particle
                 color: this.getRandomColor(p)
             });
         }
@@ -111,28 +133,47 @@ class Visualizer {
     }
     
     drawParticles(p, avgVolume, bassLevel, midLevel, highLevel, isBeat) {
-        const centerX = p.width / 2;
-        const centerY = p.height / 2;
+        // Update flow field based on audio
+        this.updateFlowField(p, bassLevel, midLevel, highLevel);
         
-        // Adjust particle behavior based on audio
+        // Debug: display flow field (uncomment to see vectors)
+         this.displayFlowField(p, bassLevel);
+        
+        // Adjust particle speed based on volume
+        const speed = this.particleSpeed * (1 + avgVolume * 3);
+        
+        // Adjust particle brightness based on beat detection
+        const beatBrightness = isBeat ? 1.5 : 1.0;
+        
+        p.push();
+        
+        // Adjust blend mode for more vibrant visuals
+        p.blendMode(p.ADD);
+        
+        // Update and draw particles
         for (let i = 0; i < this.particles.length; i++) {
             const particle = this.particles[i];
             
-            // Update position with some noise
-            particle.x += particle.speedX * (avgVolume * 10 + 1);
-            particle.y += particle.speedY * (avgVolume * 10 + 1);
+            // Save previous position for drawing trails
+            particle.prevX = particle.x;
+            particle.prevY = particle.y;
             
-            // Add some spiral motion based on bass
-            const angle = p.atan2(particle.y - centerY, particle.x - centerX);
-            const distance = p.dist(centerX, centerY, particle.x, particle.y);
+            // Get flow field force at particle position
+            const col = Math.floor(particle.x / this.resolution) % this.cols;
+            const row = Math.floor(particle.y / this.resolution) % this.rows;
+            const index = (col + this.cols) % this.cols + ((row + this.rows) % this.rows) * this.cols;
+            const force = this.flowField[index];
             
-            particle.x += p.cos(angle + bassLevel) * bassLevel * 2;
-            particle.y += p.sin(angle + bassLevel) * bassLevel * 2;
-            
-            // Change direction occasionally
-            if (p.random() < 0.02 || isBeat) {
-                particle.speedX = p.random(-1, 1);
-                particle.speedY = p.random(-1, 1);
+            if (force) {
+                // Apply flow field force with some audio reactivity
+                particle.x += force.x * speed * (1 + p.random(-0.2, 0.2));
+                particle.y += force.y * speed * (1 + p.random(-0.2, 0.2));
+                
+                // Add some directional change on beat
+                if (isBeat && p.random() < 0.2) {
+                    particle.x += p.random(-10, 10) * bassLevel;
+                    particle.y += p.random(-10, 10) * bassLevel;
+                }
             }
             
             // Keep particles on screen with wrap-around
@@ -141,24 +182,77 @@ class Visualizer {
             if (particle.y < 0) particle.y = p.height;
             if (particle.y > p.height) particle.y = 0;
             
-            // Draw the particle
-            const size = particle.size * (1 + avgVolume * 3);
-            if (isBeat) {
-                // Flash on beat
-                p.fill(255);
-                p.circle(particle.x, particle.y, size * 1.5);
+            // Update particle history (for trails)
+            if (particle.history.length > 0) {
+                // Only add to history if the particle has moved a minimum distance
+                const lastPos = particle.history[particle.history.length - 1];
+                const dist = p.dist(particle.x, particle.y, lastPos.x, lastPos.y);
+                if (dist > 5) { // Minimum distance to create a new trail point
+                    particle.history.push({x: particle.x, y: particle.y});
+                }
             } else {
-                const c = particle.color;
-                // Adjust brightness based on frequencies
-                p.fill(
-                    c[0] * (0.5 + highLevel),
-                    c[1] * (0.5 + midLevel),
-                    c[2] * (0.5 + bassLevel),
-                    200 + avgVolume * 55
-                );
-                p.circle(particle.x, particle.y, size);
+                particle.history.push({x: particle.x, y: particle.y});
             }
+            
+            // Limit history length
+            if (particle.history.length > particle.maxHistory) {
+                particle.history.shift();
+            }
+            
+            // Draw trail
+            if (particle.history.length > 1) {
+                p.noFill();
+                
+                // Get base color for particle
+                const c = particle.color;
+                
+                // Draw segments of the trail with decreasing opacity
+                for (let j = 0; j < particle.history.length - 1; j++) {
+                    // Calculate alpha based on position in trail (newer = more opaque)
+                    const alpha = p.map(j, 0, particle.history.length - 1, 20, 150) * avgVolume;
+                    
+                    // Make colors respond to frequency bands
+                    const r = c[0] * (0.5 + highLevel * beatBrightness);
+                    const g = c[1] * (0.5 + midLevel * beatBrightness);
+                    const b = c[2] * (0.5 + bassLevel * beatBrightness);
+                    
+                    // Different color for each segment to create gradient effect
+                    p.stroke(r, g, b, alpha);
+                    
+                    // Make lines thicker based on volume
+                    const strokeW = (1 + avgVolume * 3) * (j / particle.history.length);
+                    p.strokeWeight(strokeW);
+                    
+                    // Draw line segment
+                    const p1 = particle.history[j];
+                    const p2 = particle.history[j + 1];
+                    p.line(p1.x, p1.y, p2.x, p2.y);
+                }
+            }
+            
+            // Draw the particle itself
+            const size = particle.size * (1 + avgVolume * 2);
+            
+            // Flash on beat
+            if (isBeat) {
+                p.fill(255, 120);
+                p.noStroke();
+                p.circle(particle.x, particle.y, size * 1.5);
+            }
+            
+            // Normal particle
+            const c = particle.color;
+            p.fill(
+                c[0] * (0.5 + highLevel * beatBrightness),
+                c[1] * (0.5 + midLevel * beatBrightness),
+                c[2] * (0.5 + bassLevel * beatBrightness),
+                150 + avgVolume * 105
+            );
+            p.noStroke();
+            p.circle(particle.x, particle.y, size);
         }
+        
+        p.pop();
     }
     
     drawWaves(p, freqData, avgVolume, isBeat) {
@@ -308,5 +402,59 @@ class Visualizer {
     
     setColorScheme(scheme) {
         this.colorScheme = scheme;
+    }
+    
+    // Update the flow field based on audio
+    updateFlowField(p, bassLevel, midLevel, highLevel) {
+        this.noiseZ += 0.003 + bassLevel * 0.01; // Advance through noise space
+        
+        let noiseMultiplier = 1 + bassLevel * 5; // Bass affects noise intensity
+        let angleMultiplier = p.TWO_PI * (1 + highLevel); // High frequencies affect angle range
+        
+        // Update flow field vectors
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                // Calculate noise value
+                const noiseVal = p.noise(
+                    x * this.noiseScale * noiseMultiplier, 
+                    y * this.noiseScale * noiseMultiplier, 
+                    this.noiseZ
+                );
+                
+                // Convert noise to angle (0-2PI)
+                const angle = noiseVal * angleMultiplier;
+                
+                // Store vector in flow field
+                const index = x + y * this.cols;
+                this.flowField[index] = p.createVector(
+                    p.cos(angle), 
+                    p.sin(angle)
+                );
+            }
+        }
+    }
+    
+    // Debug method to display the flow field
+    displayFlowField(p, intensity) {
+        p.stroke(255, 50);
+        p.strokeWeight(1);
+        
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                const index = x + y * this.cols;
+                const force = this.flowField[index];
+                
+                if (force) {
+                    const posX = x * this.resolution;
+                    const posY = y * this.resolution;
+                    
+                    p.push();
+                    p.translate(posX, posY);
+                    p.rotate(p.atan2(force.y, force.x));
+                    p.line(0, 0, this.resolution * 0.8, 0);
+                    p.pop();
+                }
+            }
+        }
     }
 } 
