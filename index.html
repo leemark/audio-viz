@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio-Reactive Generative Art</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- p5.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Audio-Reactive Generative Art</h1>
+        </header>
+        
+        <div class="audio-controls">
+            <div class="upload-section">
+                <label for="audio-upload" class="upload-btn">Upload Audio File</label>
+                <input type="file" id="audio-upload" accept="audio/*">
+                
+                <div class="sample-selector">
+                    <h3>Or select a sample:</h3>
+                    <div class="sample-buttons" id="sample-container">
+                        <!-- Sample buttons will be added here dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="player-controls">
+                <button id="play-btn" disabled>Play</button>
+                <button id="pause-btn" disabled>Pause</button>
+                <div class="volume-control">
+                    <label for="volume">Volume:</label>
+                    <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7">
+                </div>
+            </div>
+        </div>
+        
+        <div id="visualization-container">
+            <!-- p5.js canvas will go here -->
+        </div>
+        
+        <div class="viz-controls">
+            <div class="viz-selector">
+                <label for="viz-style">Visualization Style:</label>
+                <select id="viz-style">
+                    <option value="particles">Particles</option>
+                    <option value="waves">Waves</option>
+                    <option value="geometric">Geometric</option>
+                </select>
+            </div>
+            
+            <div class="color-scheme">
+                <label for="color-scheme">Color Scheme:</label>
+                <select id="color-scheme">
+                    <option value="spectrum">Spectrum</option>
+                    <option value="monochrome">Monochrome</option>
+                    <option value="pastel">Pastel</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/audioAnalyzer.js"></script>
+    <script src="scripts/visualizer.js"></script>
+    <script src="scripts/main.js"></script>
+</body>
+</html> 

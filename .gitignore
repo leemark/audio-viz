@@ -1,0 +1,14 @@
+# Development tracking files
+DEVELOPMENT_LOG.md
+CURSOR_CONTEXT.md
+
+# Node modules (if needed later)
+node_modules/
+
+# Editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db 
