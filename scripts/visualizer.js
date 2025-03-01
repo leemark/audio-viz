@@ -137,7 +137,7 @@ class Visualizer {
         this.updateFlowField(p, bassLevel, midLevel, highLevel);
         
         // Debug: display flow field (uncomment to see vectors)
-         this.displayFlowField(p, bassLevel);
+        // this.displayFlowField(p, bassLevel);
         
         // Adjust particle speed based on volume
         const speed = this.particleSpeed * (1 + avgVolume * 3);
